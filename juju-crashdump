@@ -15,9 +15,14 @@ import uuid
 import yaml
 from collections import defaultdict
 from os.path import expanduser
-import apport
-import apport.crashdb
-import apport.hookutils
+try:
+    import apport
+    import apport.crashdb
+    import apport.hookutils
+    APPORT = True
+except ImportError:
+    APPORT = False
+
 from textwrap import dedent
 
 
@@ -154,6 +159,15 @@ class CrashCollector(object):
 
 
 def upload_file_to_bug(bugnum, file_):
+    if not APPORT:
+        # We guard against this by checking for APPORT when the script
+        # first runs (see bottom of this file). Just in case we get
+        # here without apport, inform the user and skip this routine.
+        print(
+            "Apport not available in this environment. "
+            "Skipping upload file to bug."
+        )
+        return
     crashdb = crashdb = apport.crashdb.get_crashdb(None)
     if not crashdb.can_update(bugnum):
         print(dedent("""
@@ -207,6 +221,11 @@ def parse_args():
 
 def main():
     opts = parse_args()
+    if opts.bug and not APPORT:
+        print("Apport not available in this environment. "
+              "You must 'apt install' apport to use the 'bug' option. "
+              "Aborting run.")
+        return
     collector = CrashCollector(
         model=opts.model,
         max_size=opts.max_file_size,
