@@ -128,10 +128,22 @@ class CrashCollector(object):
     def retrieve_unit_tarballs(self):
         juju_status = yaml.load(open('juju_status.yaml', 'r'))
         aliases, units = service_unit_addresses(juju_status)
+        if not units:
+            # Running against an empty model.
+            print("0 units found. No tarballs to retrieve.")
+            return
         for ip, alias_group in aliases.items():
             any_unit = alias_group.intersection(units).pop()
             juju_cmd("scp %s:/tmp/juju-dump-%s.tar ." % (any_unit, self.uniq))
-            shutil.move("juju-dump-%s.tar" % self.uniq, "%s.tar" % ip)
+            try:
+                shutil.move("juju-dump-%s.tar" % self.uniq, "%s.tar" % ip)
+            except IOError:
+                # If you are running crashdump as a machine is coming
+                # up, or scp fails for some other reason, you won't
+                # have a tarball to move. In that case, skip, and try
+                # fetching the tarball for the next machine.
+                print("Unable to retrieve tarball for %s. Skipping." % ip)
+                continue
             for alias in alias_group:
                 os.symlink('%s.tar' % ip, '%s.tar' % alias.replace('/', '_'))
 
